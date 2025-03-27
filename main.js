@@ -3,66 +3,89 @@ const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs'); // Original fs for sync checks
 const fsp = require('fs').promises; // fs.promises for async operations
-require('dotenv').config(); // ** ADDED: Load .env variables **
+const Store = require('electron-store'); // ** ADDED: For settings persistence **
+require('dotenv').config(); // Load .env variables (mostly for initial API key if needed)
 
 // --- Configuration ---
+const portableDataPath = path.resolve(__dirname, 'app_data');
 
-// *** CHANGE 1: Define the desired data directory within the app's root ***
-// path.resolve(__dirname) gives the application's root directory (e.g., C:\Users\julia\Desktop\bookmark-manager)
-const portableDataPath = path.resolve(__dirname, 'app_data'); // Using 'app_data' subfolder for neatness
-
-// *** CHANGE 2: Tell Electron to use this path for ALL its user data ***
-// This MUST be called before the app 'ready' event.
 try {
     app.setPath('userData', portableDataPath);
     console.log(`Electron user data path set to: ${portableDataPath}`);
 } catch (error) {
-    // This might happen if called too late, though unlikely here.
     console.error('FATAL: Could not set Electron user data path:', error);
-    // If this fails, the app might still write to AppData, which is undesirable.
-    // Consider quitting or showing a fatal error dialog.
     dialog.showErrorBox('Configuration Error', `Failed to set portable data path. App may not work correctly. Error: ${error.message}`);
     app.quit();
 }
 
-// --- Now use the same path for our application's specific data ---
-const userDataPath = portableDataPath; // Use the path we just set for Electron
-console.log(`Application data path configured to: ${userDataPath}`); // Verify it's the same
+const userDataPath = portableDataPath;
+console.log(`Application data path configured to: ${userDataPath}`);
 
-// Setup paths (ensure they are absolute - they will be due to path.resolve above)
+// Setup paths
 const csvPath = path.join(userDataPath, 'bookmarks.csv');
 const screenshotDir = path.join(userDataPath, 'screenshots');
 
-// --- Managers and Clients (No changes needed here as paths are injected) ---
+// --- Settings Management ---
+const store = new Store({
+    // Defaults ensure settings exist on first launch
+    defaults: {
+        darkMode: false,
+        headless: true, // Default to headless
+        llmApiUrl: 'https://api.deepseek.com/v1/chat/completions',
+        llmModel: 'deepseek-chat',
+        llmApiKey: process.env.DEEPSEEK_API_KEY || '', // Use .env as initial default only
+    },
+    // Ensure it uses the portable path we set
+    cwd: userDataPath,
+    // Optional: name the settings file
+    name: 'app-settings'
+});
+console.log(`Settings file path: ${store.path}`);
+
+// --- Managers and Clients (Initialize dynamically based on settings) ---
 const BookmarkManager = require('./utils/csv_manager');
 const URLProcessor = require('./utils/url_processor');
 const LLMClient = require('./utils/llm_clients');
 
-// Get API Key from environment variable
-const deepSeekApiKey = process.env.DEEPSEEK_API_KEY;
+let llmClient; // To be initialized
+let urlProcessor; // To be initialized
+const bookmarkManager = new BookmarkManager(csvPath); // CSV path is fixed
 
-// Check if API Key is set
-if (!deepSeekApiKey) {
-  console.error("*****************************************************");
-  console.error("FATAL ERROR: DEEPSEEK_API_KEY is not set in the .env file.");
-  console.error("Please create a .env file in the project root with:");
-  console.error("DEEPSEEK_API_KEY=your_actual_api_key");
-  console.error("*****************************************************");
+function initializeServices() {
+    const settings = store.get();
+    console.log("Initializing services with settings:", settings);
+
+    // Get LLM config from stored settings
+    const currentApiKey = settings.llmApiKey || ''; // Use stored key
+    const currentApiUrl = settings.llmApiUrl || 'https://api.deepseek.com/v1/chat/completions'; // Fallback default
+    const currentModel = settings.llmModel || 'deepseek-chat'; // Fallback default
+
+    // Warn if API Key is missing for known cloud providers (adjust as needed)
+    if (!currentApiKey && (currentApiUrl.includes('deepseek.com') || currentApiUrl.includes('mistral.ai') /* add others */)) {
+        console.warn("*****************************************************");
+        console.warn(`WARNING: API Key might be required for ${currentApiUrl} but is not set in settings.`);
+        console.warn("Please configure it via the Settings page.");
+        console.warn("*****************************************************");
+        // Show non-fatal warning dialog ONCE? Or rely on console/toast? Let's stick to console for now.
+    }
+
+    llmClient = new LLMClient(
+        currentApiUrl,
+        currentModel,
+        currentApiKey
+    );
+
+    // URLProcessor needs the screenshot directory and the LLM client
+    urlProcessor = new URLProcessor(screenshotDir, llmClient);
+
+    console.log("LLM and URL Processor services initialized/updated.");
 }
 
-// Create LLM client
-const llmClient = new LLMClient(
-    'https://api.deepseek.com/v1/chat/completions',
-    'deepseek-chat',
-    deepSeekApiKey
-);
-
-// Create managers with shared LLM client and absolute paths
-const bookmarkManager = new BookmarkManager(csvPath);
-const urlProcessor = new URLProcessor(screenshotDir, llmClient);
+// Initialize services on startup
+initializeServices();
 
 
-// --- Global Handlers (No changes) ---
+// --- Global Handlers ---
 process.on('uncaughtException', (error, origin) => {
   console.error('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
   console.error('!!!!!!!! UNCAUGHT EXCEPTION !!!!!!!');
@@ -78,15 +101,15 @@ process.on('unhandledRejection', (reason, promise) => {
     console.error('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
 });
 
-// --- Initialization (No changes to logic, but paths used are now different) ---
+// --- Initialization ---
 let mainWindow;
+let settingsWindow = null; // Keep track of the settings window
 
 // Make sure directories exist (use async)
 async function initializeDirectories() {
   try {
-    // Ensure the main data directory and the screenshot subdirectory exist
-    await fsp.mkdir(userDataPath, { recursive: true }); // Creates 'app_data'
-    await fsp.mkdir(screenshotDir, { recursive: true }); // Creates 'app_data/screenshots'
+    await fsp.mkdir(userDataPath, { recursive: true });
+    await fsp.mkdir(screenshotDir, { recursive: true });
     console.log(`Ensured directories exist: ${userDataPath}, ${screenshotDir}`);
   } catch (error) {
     console.error('FATAL: Error creating essential directories:', error);
@@ -95,7 +118,7 @@ async function initializeDirectories() {
   }
 }
 
-// Create main application window (No changes)
+// Create main application window
 function createWindow() {
   try {
     mainWindow = new BrowserWindow({
@@ -106,10 +129,19 @@ function createWindow() {
         contextIsolation: true,
         preload: path.join(__dirname, 'preload.js')
       },
+      show: false // Don't show immediately
     });
 
     mainWindow.loadFile(path.join(__dirname, 'renderer/index.html'));
-    // mainWindow.webContents.openDevTools();
+    // mainWindow.webContents.openDevTools(); // Uncomment for debugging main window
+
+    // Apply theme when content is ready
+    mainWindow.webContents.on('did-finish-load', () => {
+        const isDarkMode = store.get('darkMode', false);
+        mainWindow.webContents.send('apply-theme', isDarkMode);
+        mainWindow.show(); // Show after theme is ready
+    });
+
 
     mainWindow.webContents.setWindowOpenHandler(({ url }) => {
         if (url.startsWith('http:') || url.startsWith('https:')) {
@@ -122,6 +154,10 @@ function createWindow() {
 
      mainWindow.on('closed', () => {
         mainWindow = null;
+        // If main window closes, also close settings window if open
+        if (settingsWindow) {
+            settingsWindow.close();
+        }
     });
 
   } catch (error) {
@@ -130,7 +166,53 @@ function createWindow() {
   }
 }
 
-// --- App Lifecycle Events (No changes) ---
+// --- Settings Window ---
+function createSettingsWindow() {
+    // If window already exists, focus it
+    if (settingsWindow) {
+        settingsWindow.focus();
+        return;
+    }
+
+    try {
+        settingsWindow = new BrowserWindow({
+            width: 800,
+            height: 650,
+            title: 'Settings',
+            parent: mainWindow, // Optional: make it a child window
+            modal: false, // Allow interaction with main window
+            webPreferences: {
+                nodeIntegration: false,
+                contextIsolation: true,
+                preload: path.join(__dirname, 'preload.js') // Reuse the same preload
+            },
+             show: false // Don't show immediately
+        });
+
+        settingsWindow.loadFile(path.join(__dirname, 'renderer/settings.html'));
+        // settingsWindow.webContents.openDevTools(); // Uncomment for debugging settings window
+
+        // Apply theme when content is ready
+        settingsWindow.webContents.on('did-finish-load', () => {
+            const isDarkMode = store.get('darkMode', false);
+             // Send theme state to settings window JS via preload
+            settingsWindow.webContents.send('apply-theme', isDarkMode);
+             settingsWindow.show(); // Show after theme is ready
+        });
+
+
+        settingsWindow.on('closed', () => {
+            settingsWindow = null; // Allow reopening
+        });
+
+    } catch (error) {
+        console.error('Error creating settings window:', error);
+        dialog.showErrorBox('Window Creation Error', `Failed to create the settings window: ${error.message}`);
+    }
+}
+
+
+// --- App Lifecycle Events ---
 app.whenReady().then(async () => {
   await initializeDirectories();
   createWindow();
@@ -152,13 +234,72 @@ app.on('window-all-closed', function () {
     }
 });
 
-// --- IPC Handlers (No changes needed in handlers themselves) ---
+// --- IPC Handlers ---
 
 // Standard error handler
 function handleIPCError(error, operation) {
   console.error(`Error in IPC operation '${operation}':`, error);
   return { success: false, error: error.message || 'An unknown error occurred', details: error.stack };
 }
+
+// --- Settings IPC ---
+ipcMain.handle('get-settings', async () => {
+    try {
+        const settings = store.get();
+        // Ensure sensitive keys aren't accidentally logged extensively
+        console.log('IPC: get-settings called. Returning current settings.');
+        return { success: true, data: settings };
+    } catch (error) {
+        return handleIPCError(error, 'get-settings');
+    }
+});
+
+ipcMain.handle('set-settings', async (_, newSettings) => {
+    try {
+        console.log('IPC: set-settings called with:', newSettings);
+        // Validate or sanitize newSettings if necessary
+        for (const key in newSettings) {
+            if (Object.hasOwnProperty.call(newSettings, key)) {
+                store.set(key, newSettings[key]);
+            }
+        }
+        // If LLM settings changed, re-initialize services
+        if ('llmApiKey' in newSettings || 'llmApiUrl' in newSettings || 'llmModel' in newSettings) {
+            console.log("LLM settings changed, re-initializing services...");
+            initializeServices(); // Recreate LLM client and URL processor
+        }
+        // If headless setting changed, urlProcessor doesn't need re-init,
+        // it reads the setting during processURL/takeScreenshot calls.
+        // If dark mode changed, the theme-changed IPC will handle UI updates.
+
+        return { success: true };
+    } catch (error) {
+        return handleIPCError(error, 'set-settings');
+    }
+});
+
+// Handle theme change notification from settings window
+ipcMain.on('theme-changed', (event, isDarkMode) => {
+    console.log('IPC: theme-changed received:', isDarkMode);
+    // Notify the main window (if it exists)
+    if (mainWindow) {
+        mainWindow.webContents.send('apply-theme', isDarkMode);
+    }
+    // Also notify the settings window itself (though it might have already updated)
+    if (settingsWindow && event.sender !== settingsWindow.webContents) {
+         settingsWindow.webContents.send('apply-theme', isDarkMode);
+    }
+});
+
+
+// Open Settings Window IPC
+ipcMain.handle('open-settings-window', () => {
+    createSettingsWindow();
+    return { success: true };
+});
+
+
+// --- Bookmark IPC Handlers (Mostly Unchanged, but use current settings) ---
 
 // Get all bookmarks
 ipcMain.handle('get-bookmarks', async () => {
@@ -179,7 +320,10 @@ ipcMain.handle('add-bookmark', async (_, url) => {
   const trimmedUrl = url.trim();
 
   try {
-    const newBookmarkData = await urlProcessor.processURL(trimmedUrl);
+    // *** Read current headless setting ***
+    const isHeadless = store.get('headless', true);
+    console.log(`Processing URL with headless mode: ${isHeadless}`);
+    const newBookmarkData = await urlProcessor.processURL(trimmedUrl, { headless: isHeadless }); // Pass setting
     console.log(`IPC: URL processed, data received:`, newBookmarkData);
     await bookmarkManager.saveBookmark(newBookmarkData);
     console.log(`IPC: Bookmark saved to CSV: ${newBookmarkData.URL}`);
@@ -215,7 +359,7 @@ ipcMain.handle('filter-by-tags', async (_, tags) => {
   }
 });
 
-// Filter by date (logic remains, uses data from potentially different CSV location)
+// Filter by date
 ipcMain.handle('filter-by-date', async (_, days) => {
   try {
     const bookmarks = await bookmarkManager.getBookmarks();
@@ -257,32 +401,41 @@ ipcMain.handle('toggle-favorite', async (_, bookmark) => {
       return { success: false, error: "Invalid bookmark data provided for toggle favorite." };
   }
   try {
+    // Determine the new state based on the provided bookmark data
     const currentIsFavorite = String(bookmark.Favorite).toLowerCase() === 'true';
-    const updatedBookmarkData = {
-      ...bookmark,
-      Favorite: !currentIsFavorite
-    };
-    await bookmarkManager.saveBookmark(updatedBookmarkData);
-    return { success: true, bookmark: { ...updatedBookmarkData, Favorite: String(!currentIsFavorite) } };
+    const newFavoriteState = !currentIsFavorite;
+
+    // Create the update object with only the fields we absolutely need to change
+    // Preserve existing data from the CSV if possible by reading first
+    const existingBookmarks = await bookmarkManager.getBookmarks();
+    const existingBookmark = existingBookmarks.find(b => b.URL === bookmark.URL);
+
+    if (!existingBookmark) {
+        // This case should ideally not happen if the UI is synced, but handle defensively
+        console.warn(`Toggle Favorite: Bookmark ${bookmark.URL} not found in CSV. Saving as new.`);
+         const updatedBookmarkData = {
+            ...bookmark, // Use data from renderer as fallback
+            Favorite: newFavoriteState // Set the new state
+        };
+        await bookmarkManager.saveBookmark(updatedBookmarkData);
+        // Return the structure expected by the renderer
+         return { success: true, bookmark: {...updatedBookmarkData, Favorite: String(newFavoriteState)} };
+    } else {
+         // Merge changes onto the existing data from the CSV
+         const updatedBookmarkData = {
+            ...existingBookmark, // Start with data from CSV
+            Favorite: newFavoriteState // Apply the new favorite state
+        };
+        await bookmarkManager.saveBookmark(updatedBookmarkData);
+         // Return the structure expected by the renderer
+         return { success: true, bookmark: {...updatedBookmarkData, Favorite: String(newFavoriteState)} };
+    }
+
   } catch (error) {
     return handleIPCError(error, 'toggle-favorite');
   }
 });
 
-// Take a screenshot (Standalone - less common)
-ipcMain.handle('take-screenshot', async (_, url) => {
-   console.warn("IPC: 'take-screenshot' called directly. Prefer 'update-screenshot' for existing bookmarks.");
-   if (!url || typeof url !== 'string' || !url.trim()) {
-      return { success: false, error: "Invalid URL provided for screenshot." };
-   }
-  try {
-    // urlProcessor uses the correctly configured screenshotDir
-    const screenshotPath = await urlProcessor.takeScreenshot(url.trim());
-    return { success: true, screenshotPath };
-  } catch (error) {
-    return handleIPCError(error, 'take-screenshot');
-  }
-});
 
 // Update bookmark screenshot
 ipcMain.handle('update-screenshot', async (_, bookmark) => {
@@ -291,22 +444,40 @@ ipcMain.handle('update-screenshot', async (_, bookmark) => {
   }
   console.log(`IPC: Received update-screenshot request for URL: ${bookmark.URL}`);
   try {
-    const newScreenshotPath = await urlProcessor.takeScreenshot(bookmark.URL);
+    // *** Read current headless setting ***
+    const isHeadless = store.get('headless', true);
+    console.log(`Taking screenshot with headless mode: ${isHeadless}`);
+    const newScreenshotPath = await urlProcessor.takeScreenshot(bookmark.URL, { headless: isHeadless }); // Pass setting
     console.log(`IPC: New screenshot taken: ${newScreenshotPath}`);
-    const oldScreenshotPath = bookmark.Screenshot;
-    const updatedBookmarkData = { ...bookmark, Screenshot: newScreenshotPath };
-    await bookmarkManager.saveBookmark(updatedBookmarkData);
-    console.log(`IPC: Bookmark ${bookmark.URL} updated with new screenshot path.`);
 
-    if (oldScreenshotPath && oldScreenshotPath !== newScreenshotPath && fs.existsSync(oldScreenshotPath)) {
-        try {
-            await fsp.unlink(oldScreenshotPath);
-            console.log(`IPC: Deleted old screenshot: ${oldScreenshotPath}`);
-        } catch (unlinkError) {
-            console.warn(`IPC: Failed to delete old screenshot file ${oldScreenshotPath}:`, unlinkError);
-        }
-    }
-    return { success: true, bookmark: updatedBookmarkData };
+    const oldScreenshotPath = bookmark.Screenshot;
+
+     // Read the latest full bookmark data before saving just the screenshot path update
+    const existingBookmarks = await bookmarkManager.getBookmarks();
+    const existingBookmark = existingBookmarks.find(b => b.URL === bookmark.URL);
+
+     if (!existingBookmark) {
+         console.warn(`Update Screenshot: Bookmark ${bookmark.URL} not found in CSV. Saving screenshot path with provided data.`);
+          const updatedBookmarkData = { ...bookmark, Screenshot: newScreenshotPath };
+          await bookmarkManager.saveBookmark(updatedBookmarkData);
+          // Delete old screenshot if path differs and exists
+           if (oldScreenshotPath && oldScreenshotPath !== newScreenshotPath && fs.existsSync(oldScreenshotPath)) {
+               try { await fsp.unlink(oldScreenshotPath); console.log(`IPC: Deleted old screenshot: ${oldScreenshotPath}`); }
+               catch (unlinkError) { console.warn(`IPC: Failed to delete old screenshot file ${oldScreenshotPath}:`, unlinkError); }
+           }
+          return { success: true, bookmark: updatedBookmarkData };
+     } else {
+         // Merge new screenshot path onto existing data
+         const updatedBookmarkData = { ...existingBookmark, Screenshot: newScreenshotPath };
+         await bookmarkManager.saveBookmark(updatedBookmarkData);
+         // Delete old screenshot if path differs and exists
+         if (oldScreenshotPath && oldScreenshotPath !== newScreenshotPath && fs.existsSync(oldScreenshotPath)) {
+             try { await fsp.unlink(oldScreenshotPath); console.log(`IPC: Deleted old screenshot: ${oldScreenshotPath}`); }
+             catch (unlinkError) { console.warn(`IPC: Failed to delete old screenshot file ${oldScreenshotPath}:`, unlinkError); }
+         }
+         return { success: true, bookmark: updatedBookmarkData };
+     }
+
   } catch (error) {
     return handleIPCError(error, 'update-screenshot');
   }
@@ -369,10 +540,10 @@ ipcMain.handle('import-csv', async () => {
       return { success: false, message: 'Import cancelled' };
     }
     const sourcePath = filePaths[0];
-    // bookmarkManager will merge into the CSV at the new portable location
     const count = await bookmarkManager.importFromCSV(sourcePath);
+    // Notify main window to refresh its list
     if (mainWindow) {
-        mainWindow.webContents.send('bookmarks-updated');
+        mainWindow.webContents.send('bookmarks-updated'); // Send simple notification
     }
     return {
       success: true,
@@ -410,20 +581,26 @@ ipcMain.handle('delete-bookmark', async (_, bookmark) => {
     const filteredBookmarks = bookmarks.filter(b => b.URL !== bookmark.URL);
     if (filteredBookmarks.length === bookmarks.length) {
         console.warn(`IPC: Bookmark to delete not found in CSV: ${bookmark.URL}`);
+        // Still proceed to delete screenshot if it exists, just in case
     }
+    // Save the filtered list regardless of whether the item was found (handles cleanup)
     await bookmarkManager.saveBookmarks(filteredBookmarks);
-    console.log(`IPC: Saved CSV after removing ${bookmark.URL}.`);
+    console.log(`IPC: Saved CSV after potentially removing ${bookmark.URL}.`);
 
+    // Delete associated screenshot
     const screenshotToDelete = bookmark.Screenshot;
-    // fs.existsSync will check the path which is now relative to the portable location
     if (screenshotToDelete && typeof screenshotToDelete === 'string' && fs.existsSync(screenshotToDelete)) {
       try {
         await fsp.unlink(screenshotToDelete);
         console.log(`IPC: Deleted associated screenshot: ${screenshotToDelete}`);
       } catch (fileError) {
+        // Log error but don't fail the whole operation
         console.error(`IPC: Error deleting screenshot file ${screenshotToDelete}:`, fileError);
       }
+    } else if (screenshotToDelete) {
+         console.log(`IPC: Screenshot path provided for deletion, but file not found: ${screenshotToDelete}`);
     }
+
     return { success: true };
   } catch (error) {
     return handleIPCError(error, 'delete-bookmark');
@@ -432,6 +609,10 @@ ipcMain.handle('delete-bookmark', async (_, bookmark) => {
 
 // Check LLM service availability
 ipcMain.handle('check-llm-service', async () => {
+  // Use the currently configured client
+  if (!llmClient) {
+      return handleIPCError(new Error("LLM Client not initialized"), 'check-llm-service');
+  }
   try {
     const result = await llmClient.checkService();
     return { success: true, data: result };

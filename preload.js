@@ -1,7 +1,7 @@
 // preload.js
 const { contextBridge, ipcRenderer } = require('electron');
 
-// Wrapper function to handle the { success, data/error } structure
+// Wrapper function to handle the { success, data/error } structure for invokes
 const invokeWrapper = (channel, ...args) => {
     console.log(`Preload: Invoking ${channel}`, args);
     return ipcRenderer.invoke(channel, ...args)
@@ -13,7 +13,7 @@ const invokeWrapper = (channel, ...args) => {
                      return result; // Pass the whole { success: true, data/bookmark: ... } object
                  } else {
                      // Throw an error that includes the message from the main process
-                     throw new Error(result.error || 'An unknown error occurred in the main process.');
+                     throw new Error(result.error || `An unknown error occurred in the main process during ${channel}.`);
                  }
             } else {
                  // If the main process didn't return the expected structure, treat as error
@@ -37,13 +37,12 @@ contextBridge.exposeInMainWorld('api', {
   addBookmark: (url) => invokeWrapper('add-bookmark', url),
   searchBookmarks: (query) => invokeWrapper('search-bookmarks', query),
   filterByTags: (tags) => invokeWrapper('filter-by-tags', tags),
-  // filterByDate: (days) => invokeWrapper('filter-by-date', days), // Keep if needed, but renderer handles dates now
+  // filterByDate: (days) => invokeWrapper('filter-by-date', days), // Renderer handles dates
   getFavorites: () => invokeWrapper('get-favorites'),
   toggleFavorite: (bookmark) => invokeWrapper('toggle-favorite', bookmark),
   deleteBookmark: (bookmark) => invokeWrapper('delete-bookmark', bookmark),
 
   // Screenshot functionality
-  // takeScreenshot: (url) => invokeWrapper('take-screenshot', url), // Less used, prefer updateScreenshot
   updateScreenshot: (bookmark) => invokeWrapper('update-screenshot', bookmark),
 
   // Tag management
@@ -56,12 +55,26 @@ contextBridge.exposeInMainWorld('api', {
   // URL handling
   openURL: (url) => invokeWrapper('open-url', url),
 
-  // System
-  checkLLMService: () => invokeWrapper('check-llm-service')
+  // System / LLM
+  checkLLMService: () => invokeWrapper('check-llm-service'),
 
-  // Example of listening for main process events (if needed)
-  // onBookmarksUpdated: (callback) => ipcRenderer.on('bookmarks-updated', (event, ...args) => callback(...args)),
-  // removeBookmarksUpdatedListener: (callback) => ipcRenderer.removeListener('bookmarks-updated', callback)
+  // --- Settings ---
+  getSettings: () => invokeWrapper('get-settings'),
+  setSettings: (settingsObject) => invokeWrapper('set-settings', settingsObject),
+  openSettingsWindow: () => invokeWrapper('open-settings-window'),
+
+  // --- Listeners / Notifications ---
+  // For main window to react to theme changes from settings
+  onApplyTheme: (callback) => ipcRenderer.on('apply-theme', (event, isDarkMode) => callback(isDarkMode)),
+  removeApplyThemeListener: (callback) => ipcRenderer.removeListener('apply-theme', callback),
+
+  // For settings window to notify main process about theme change
+  notifyThemeChange: (isDarkMode) => ipcRenderer.send('theme-changed', isDarkMode),
+
+  // For main window to react to general bookmark updates (like after import)
+  onBookmarksUpdated: (callback) => ipcRenderer.on('bookmarks-updated', (event) => callback()),
+  removeBookmarksUpdatedListener: (callback) => ipcRenderer.removeListener('bookmarks-updated', callback),
+
 });
 
 console.log('Preload script executed and API exposed.');

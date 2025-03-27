@@ -1,0 +1,251 @@
+/* renderer/settings.css */
+/* Basic styles, can inherit from styles.css if preferred */
+body {
+    font-family: var(--font-family);
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    padding: 20px;
+    font-size: 14px;
+    line-height: 1.6;
+	margin: 0;
+	padding: 0;
+}
+
+/* Inherit dark mode */
+body.dark-mode {
+    background-color: var(--dark-bg-color, #1a1a1a); /* Define fallback */
+    color: var(--dark-text-color, #e0e0e0);
+}
+body.dark-mode input[type="text"],
+body.dark-mode input[type="password"] {
+    background-color: #333;
+    color: #eee;
+    border-color: #555;
+}
+body.dark-mode input[type="text"]:focus,
+body.dark-mode input[type="password"]:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(84, 87, 255, 0.3);
+}
+body.dark-mode label {
+    color: var(--dark-text-color-light, #bbb);
+}
+body.dark-mode h1, body.dark-mode h2 {
+    color: var(--dark-text-color, #e0e0e0);
+    border-bottom-color: #444;
+}
+body.dark-mode .settings-section {
+    background-color: #2a2a2a;
+    border-color: #444;
+}
+body.dark-mode .setting-description {
+    color: #aaa;
+}
+body.dark-mode .visibility-toggle {
+    background-color: #444;
+    color: #ccc;
+}
+body.dark-mode .visibility-toggle:hover {
+    background-color: #555;
+}
+
+.settings-container {
+  width: 100%;
+  height: 100vh; /* Full viewport height */
+  overflow-y: auto; /* Enable vertical scrolling */
+  padding: 0 20px; /* Add horizontal padding */
+}
+
+
+
+
+
+h1 {
+    font-size: 24px;
+    color: var(--primary-color);
+    margin-bottom: 25px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+h2 {
+    font-size: 18px;
+    margin-bottom: 15px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid #eee; /* Lighter border under section titles */
+}
+
+.settings-section {
+    margin-bottom: 30px;
+    padding: 20px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background-color: #fdfdfd; /* Slightly off-white */
+}
+
+.setting-item {
+    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column; /* Stack label and input */
+}
+
+.setting-item label:not(.switch):not(.radio-group label) {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: var(--text-color-light);
+}
+
+.setting-item input[type="text"],
+.setting-item input[type="password"] {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 14px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.setting-item input[type="text"]:focus,
+.setting-item input[type="password"]:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(84, 87, 255, 0.2);
+}
+
+/* Special case for API key with visibility toggle */
+.setting-item input[type="password"] {
+    padding-right: 40px; /* Space for the button */
+}
+.setting-item {
+    position: relative; /* Needed for absolute positioning of the toggle */
+}
+.visibility-toggle {
+    position: absolute;
+    right: 1px; /* Adjust as needed */
+    top: 30px; /* Adjust based on label height + margin + padding */
+    bottom: 1px; /* Adjust as needed */
+    width: 36px;
+    background-color: #eee;
+    border: none;
+    border-left: 1px solid var(--border-color);
+    border-radius: 0 4px 4px 0;
+    cursor: pointer;
+    color: #555;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.visibility-toggle:hover {
+    background-color: #ddd;
+}
+
+
+.setting-description {
+    font-size: 12px;
+    color: var(--text-color-light);
+    margin-top: -10px; /* Pull closer to the element above */
+    margin-bottom: 15px;
+}
+
+.radio-group label {
+    font-weight: normal;
+    margin-left: 5px;
+    margin-right: 15px;
+    color: var(--text-color);
+}
+.radio-group input[type="radio"] {
+    margin-right: 3px;
+}
+
+
+/* Basic Toggle Switch CSS */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 50px; /* Smaller toggle */
+  height: 24px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: .4s;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 18px; /* Smaller handle */
+  width: 18px;
+  left: 3px; /* Adjusted position */
+  bottom: 3px;
+  background-color: white;
+  transition: .4s;
+}
+
+input:checked + .slider {
+  background-color: var(--primary-color);
+}
+
+input:checked + .slider:before {
+  transform: translateX(26px); /* Adjusted slide distance */
+}
+
+/* Rounded sliders */
+.slider.round {
+  border-radius: 24px;
+}
+
+.slider.round:before {
+  border-radius: 50%;
+}
+
+.settings-actions {
+    margin-top: 30px;
+    text-align: right;
+}
+
+.status-message {
+    display: inline-block;
+    margin-right: 15px;
+    font-style: italic;
+    color: var(--success-color);
+    opacity: 0;
+    transition: opacity 0.5s;
+}
+.status-message.error {
+    color: var(--error-color);
+}
+.status-message.show {
+    opacity: 1;
+}
+
+/* Ensure button styles are loaded if not inheriting */
+button {
+  background-color: var(--primary-color);
+  color: var(--button-text);
+  border: none;
+  border-radius: 4px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+button:hover {
+  background-color: var(--primary-color-dark);
+}

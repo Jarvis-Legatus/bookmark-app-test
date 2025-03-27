@@ -3,23 +3,27 @@
 <html>
 <head>
   <meta charset="UTF-8">
+   <!-- ** CSP to allow loading local file:// images and potentially others ** -->
+   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' file: data:; connect-src 'self' https://api.deepseek.com http://localhost:11434;">
   <title>Bookmark Manager</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="scrollbars.css">
+
 </head>
 <body>
   <div id="app">
     <div class="sidebar">
       <h1>Bookmarks</h1>
-      
+
       <div class="add-bookmark">
-        <input type="text" id="url-input" placeholder="Add new URL">
+        <input type="text" id="url-input" placeholder="Add new URL (e.g., example.com)">
         <button id="add-button">Add</button>
       </div>
-      
+
       <div class="search-section">
         <input type="text" id="search-input" placeholder="Search...">
       </div>
-      
+
       <div class="filter-section">
         <h3>Filters</h3>
         <ul id="filters">
@@ -29,25 +33,30 @@
           <li data-filter="week">Added This Week</li>
         </ul>
       </div>
-      
+
       <div class="tags-section">
         <h3>Tags</h3>
-        <div id="tags-list"></div>
+        <div id="tags-list"><span>Loading tags...</span></div>
       </div>
-      
-      <div class="import-export">
-        <button id="export-button">Export CSV</button>
-        <button id="import-button">Import CSV</button>
+
+      <div class="bottom-actions"> <!-- Wrapper for bottom buttons -->
+        <div class="import-export">
+            <button id="export-button">Export CSV</button>
+            <button id="import-button">Import CSV</button>
+        </div>
+        <div class="settings-action"> <!-- ** NEW Settings Button Area ** -->
+            <button id="settings-button">⚙️ Settings</button>
+        </div>
       </div>
     </div>
-    
+
     <div class="main-content">
       <div id="bookmarks-grid"></div>
     </div>
   </div>
-  
+
   <div id="toast" class="toast"></div>
-  
+
   <script src="app.js"></script>
 </body>
 </html>

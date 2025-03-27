@@ -10,9 +10,8 @@ out
 # Environment variables
 .env
 
-# Data and screenshots (if you don't want these in version control)
-# data/
-# screenshots/
+# app_data
+app_data
 
 # OS specific
 .DS_Store

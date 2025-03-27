@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Settings</title>
+    <link rel="stylesheet" href="settings.css">
+    <!-- Link to main styles for variables, optionally -->
+    <link rel="stylesheet" href="styles.css">
+	<link rel="stylesheet" href="scrollbars.css">
+
+	
+</head>
+<body>
+    <div class="settings-container">
+        <h1>Settings</h1>
+
+        <div class="settings-section">
+            <h2>Appearance</h2>
+            <div class="setting-item">
+                <label for="darkModeToggle">Dark Mode</label>
+                <label class="switch">
+                    <input type="checkbox" id="darkModeToggle">
+                    <span class="slider round"></span>
+                </label>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h2>Web Scraping</h2>
+            <div class="setting-item">
+                <label>Browser Mode</label>
+                <div class="radio-group">
+                    <input type="radio" id="headlessTrue" name="headlessMode" value="true">
+                    <label for="headlessTrue">Headless (Faster, less compatible)</label>
+                    <br>
+                    <input type="radio" id="headlessFalse" name="headlessMode" value="false">
+                    <label for="headlessFalse">Non-Headless (Slower, more compatible)</label>
+                </div>
+            </div>
+             <p class="setting-description">
+                Headless mode runs the browser invisibly. Non-headless shows the browser window, which can bypass some website blocks and help debug scraping issues, but is slower. Screenshot ratio is fixed at 16:9. Basic cookie pop-up blocking is attempted.
+            </p>
+        </div>
+
+        <div class="settings-section">
+            <h2>LLM Configuration</h2>
+             <p class="setting-description">
+                Configure the API endpoint and model for the Language Model (e.g., DeepSeek, Mistral, local Ollama). API Key is only needed for cloud services.
+            </p>
+            <div class="setting-item">
+                <label for="llmApiUrl">API Endpoint URL</label>
+                <input type="text" id="llmApiUrl" placeholder="e.g., http://127.0.0.1:11434/api/chat"> <!-- Updated placeholder -->
+            </div>
+             <div class="setting-item">
+                <label for="llmModel">Model Name</label>
+                <input type="text" id="llmModel" placeholder="e.g., llama3.1:latest">
+            </div>
+            <div class="setting-item">
+                <label for="llmApiKey">API Key (Optional)</label>
+                <!-- Wrap input and button -->
+                <div class="input-with-button">
+                    <input type="password" id="llmApiKey" placeholder="Enter API Key if required by the service">
+                    <button id="toggleApiKeyVisibility" type="button" class="visibility-toggle">👁️</button>
+                 </div>
+            </div>
+        </div>
+
+        <div class="settings-actions">
+             <p id="status-message" class="status-message"></p>
+             <!-- Save button removed - changes save automatically -->
+             <!-- <button id="saveButton">Save Settings</button> -->
+        </div>
+
+    </div>
+
+    <script src="settings.js"></script>
+</body>
+</html>
