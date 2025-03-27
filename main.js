@@ -5,28 +5,41 @@ const fs = require('fs'); // Original fs for sync checks
 const fsp = require('fs').promises; // fs.promises for async operations
 require('dotenv').config(); // ** ADDED: Load .env variables **
 
+// --- Configuration ---
+
+// *** CHANGE 1: Define the desired data directory within the app's root ***
+// path.resolve(__dirname) gives the application's root directory (e.g., C:\Users\julia\Desktop\bookmark-manager)
+const portableDataPath = path.resolve(__dirname, 'app_data'); // Using 'app_data' subfolder for neatness
+
+// *** CHANGE 2: Tell Electron to use this path for ALL its user data ***
+// This MUST be called before the app 'ready' event.
+try {
+    app.setPath('userData', portableDataPath);
+    console.log(`Electron user data path set to: ${portableDataPath}`);
+} catch (error) {
+    // This might happen if called too late, though unlikely here.
+    console.error('FATAL: Could not set Electron user data path:', error);
+    // If this fails, the app might still write to AppData, which is undesirable.
+    // Consider quitting or showing a fatal error dialog.
+    dialog.showErrorBox('Configuration Error', `Failed to set portable data path. App may not work correctly. Error: ${error.message}`);
+    app.quit();
+}
+
+// --- Now use the same path for our application's specific data ---
+const userDataPath = portableDataPath; // Use the path we just set for Electron
+console.log(`Application data path configured to: ${userDataPath}`); // Verify it's the same
+
+// Setup paths (ensure they are absolute - they will be due to path.resolve above)
+const csvPath = path.join(userDataPath, 'bookmarks.csv');
+const screenshotDir = path.join(userDataPath, 'screenshots');
+
+// --- Managers and Clients (No changes needed here as paths are injected) ---
 const BookmarkManager = require('./utils/csv_manager');
 const URLProcessor = require('./utils/url_processor');
 const LLMClient = require('./utils/llm_clients');
 
-// --- Configuration ---
-
-// Safely get user data path
-let userDataPath;
-try {
-  userDataPath = app.getPath('userData');
-} catch (error) {
-  console.warn('Error getting Electron userData path, falling back to local data directory:', error);
-  userDataPath = path.resolve(__dirname, 'data'); // Use path.resolve for absolute path
-}
-console.log(`User data path: ${userDataPath}`);
-
-// Setup paths (ensure they are absolute)
-const csvPath = path.join(userDataPath, 'bookmarks.csv');
-const screenshotDir = path.join(userDataPath, 'screenshots');
-
 // Get API Key from environment variable
-const deepSeekApiKey = process.env.DEEPSEEK_API_KEY; // ** CHANGED **
+const deepSeekApiKey = process.env.DEEPSEEK_API_KEY;
 
 // Check if API Key is set
 if (!deepSeekApiKey) {
@@ -35,38 +48,28 @@ if (!deepSeekApiKey) {
   console.error("Please create a .env file in the project root with:");
   console.error("DEEPSEEK_API_KEY=your_actual_api_key");
   console.error("*****************************************************");
-  // Optionally, prevent the app from fully starting or disable LLM features
-  // For now, we'll let it run but LLM calls will likely fail.
 }
 
-// Create LLM client (configure in one place only)
-// Make sure the key is passed correctly
+// Create LLM client
 const llmClient = new LLMClient(
     'https://api.deepseek.com/v1/chat/completions',
-    'deepseek-chat', // Use a compatible chat model like 'deepseek-chat'
-    deepSeekApiKey // ** CHANGED: Use variable **
+    'deepseek-chat',
+    deepSeekApiKey
 );
 
-// Create managers with shared LLM client
-// Ensure paths passed to managers are absolute
+// Create managers with shared LLM client and absolute paths
 const bookmarkManager = new BookmarkManager(csvPath);
 const urlProcessor = new URLProcessor(screenshotDir, llmClient);
 
 
-// --- Global Handlers ---
-
-// Global error handler (Use with caution - can hide bugs)
+// --- Global Handlers (No changes) ---
 process.on('uncaughtException', (error, origin) => {
   console.error('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
   console.error('!!!!!!!! UNCAUGHT EXCEPTION !!!!!!!');
   console.error('Origin:', origin);
   console.error('Error:', error);
   console.error('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
-  // Avoid exiting in production, but maybe show a dialog?
-  // dialog.showErrorBox('Unhandled Error', `An unexpected error occurred: ${error.message}\n\nPlease report this:\n${error.stack}`);
-  // app.quit(); // Consider quitting in dev mode
 });
-
 process.on('unhandledRejection', (reason, promise) => {
     console.error('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
     console.error('!!!!!! UNHANDLED REJECTION !!!!!!!');
@@ -75,57 +78,50 @@ process.on('unhandledRejection', (reason, promise) => {
     console.error('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
 });
 
-// --- Initialization ---
-
+// --- Initialization (No changes to logic, but paths used are now different) ---
 let mainWindow;
 
 // Make sure directories exist (use async)
 async function initializeDirectories() {
   try {
-    await fsp.mkdir(userDataPath, { recursive: true });
-    await fsp.mkdir(screenshotDir, { recursive: true });
+    // Ensure the main data directory and the screenshot subdirectory exist
+    await fsp.mkdir(userDataPath, { recursive: true }); // Creates 'app_data'
+    await fsp.mkdir(screenshotDir, { recursive: true }); // Creates 'app_data/screenshots'
     console.log(`Ensured directories exist: ${userDataPath}, ${screenshotDir}`);
   } catch (error) {
     console.error('FATAL: Error creating essential directories:', error);
-    // This might be a reason to quit
     dialog.showErrorBox('Initialization Error', `Failed to create application directories: ${error.message}`);
     app.quit();
   }
 }
 
-// Create main application window
+// Create main application window (No changes)
 function createWindow() {
   try {
     mainWindow = new BrowserWindow({
       width: 1200,
       height: 800,
       webPreferences: {
-        nodeIntegration: false, // Keep false for security
-        contextIsolation: true, // Keep true for security
-        preload: path.join(__dirname, 'preload.js') // Correct path
+        nodeIntegration: false,
+        contextIsolation: true,
+        preload: path.join(__dirname, 'preload.js')
       },
-      // icon: path.join(__dirname, 'assets/icon.png') // Make sure this path is correct if you have an icon
     });
 
-    // Load the index.html file
     mainWindow.loadFile(path.join(__dirname, 'renderer/index.html'));
-
-    // Open DevTools - uncomment for debugging
     // mainWindow.webContents.openDevTools();
 
-    // Handle external links securely
     mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-        // Ensure only http/https protocols are opened externally
         if (url.startsWith('http:') || url.startsWith('https:')) {
             shell.openExternal(url);
         } else {
             console.warn(`Blocked opening non-http(s) URL: ${url}`);
         }
-      return { action: 'deny' }; // Prevent Electron from opening new windows for links
+      return { action: 'deny' };
     });
 
      mainWindow.on('closed', () => {
-        mainWindow = null; // Dereference window object
+        mainWindow = null;
     });
 
   } catch (error) {
@@ -134,15 +130,12 @@ function createWindow() {
   }
 }
 
-// --- App Lifecycle Events ---
-
-// Ensure directories are ready before creating window
+// --- App Lifecycle Events (No changes) ---
 app.whenReady().then(async () => {
-  await initializeDirectories(); // Wait for dirs to be ready
+  await initializeDirectories();
   createWindow();
 
   app.on('activate', function () {
-    // On macOS, re-create window when dock icon is clicked and no other windows are open
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
 
@@ -152,7 +145,6 @@ app.whenReady().then(async () => {
   app.quit();
 });
 
-// Quit app when all windows are closed (except on macOS)
 app.on('window-all-closed', function () {
   if (process.platform !== 'darwin') {
       console.log('All windows closed, quitting app.');
@@ -160,12 +152,11 @@ app.on('window-all-closed', function () {
     }
 });
 
-// --- IPC Handlers ---
+// --- IPC Handlers (No changes needed in handlers themselves) ---
 
-// Standard error handler for IPC operations
+// Standard error handler
 function handleIPCError(error, operation) {
   console.error(`Error in IPC operation '${operation}':`, error);
-  // Return a structured error object that preload/renderer can understand
   return { success: false, error: error.message || 'An unknown error occurred', details: error.stack };
 }
 
@@ -173,7 +164,7 @@ function handleIPCError(error, operation) {
 ipcMain.handle('get-bookmarks', async () => {
   try {
     const bookmarks = await bookmarkManager.getBookmarks();
-    return { success: true, data: bookmarks }; // Wrap in success object
+    return { success: true, data: bookmarks };
   } catch (error) {
     return handleIPCError(error, 'get-bookmarks');
   }
@@ -188,31 +179,22 @@ ipcMain.handle('add-bookmark', async (_, url) => {
   const trimmedUrl = url.trim();
 
   try {
-    // 1. Process URL (fetch content, generate description/tags, take screenshot)
     const newBookmarkData = await urlProcessor.processURL(trimmedUrl);
     console.log(`IPC: URL processed, data received:`, newBookmarkData);
-
-    // 2. Save the processed data using BookmarkManager
-    // saveBookmark now returns the list of all bookmarks including the saved one
     await bookmarkManager.saveBookmark(newBookmarkData);
     console.log(`IPC: Bookmark saved to CSV: ${newBookmarkData.URL}`);
-
-    // Return the single newly added/updated bookmark data
     return { success: true, bookmark: newBookmarkData };
-
   } catch (error) {
       console.error(`IPC: Failed to add bookmark for ${trimmedUrl}:`, error);
-      // Provide more context if possible
       let errorMessage = error.message || 'Failed to process or save bookmark.';
-      if (error.cause) { // If underlying error is available
+      if (error.cause) {
         errorMessage += ` Cause: ${error.cause}`;
       }
       return { success: false, error: errorMessage };
   }
 });
 
-
-// Search bookmarks by query text
+// Search bookmarks
 ipcMain.handle('search-bookmarks', async (_, query) => {
   try {
     const results = await bookmarkManager.searchBookmarks(query);
@@ -222,9 +204,8 @@ ipcMain.handle('search-bookmarks', async (_, query) => {
   }
 });
 
-// Filter bookmarks by tags
+// Filter by tags
 ipcMain.handle('filter-by-tags', async (_, tags) => {
-  // Ensure tags is an array
   const tagArray = Array.isArray(tags) ? tags : (tags ? [tags] : []);
   try {
     const results = await bookmarkManager.filterByTags(tagArray);
@@ -234,26 +215,23 @@ ipcMain.handle('filter-by-tags', async (_, tags) => {
   }
 });
 
-// Filter bookmarks by date (simplified from original - relies on frontend filtering)
-// Kept for potential future use, but renderer/app.js now handles date filtering
+// Filter by date (logic remains, uses data from potentially different CSV location)
 ipcMain.handle('filter-by-date', async (_, days) => {
   try {
     const bookmarks = await bookmarkManager.getBookmarks();
     if (days === 0 || days === undefined || days === null) {
-        return { success: true, data: bookmarks }; // Return all if days is 0 or invalid
+        return { success: true, data: bookmarks };
     }
-
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - days);
-    cutoffDate.setHours(0, 0, 0, 0); // Start of the day
-
+    cutoffDate.setHours(0, 0, 0, 0);
     const filtered = bookmarks.filter(bookmark => {
       try {
           const bookmarkDate = new Date(bookmark.Date);
           return !isNaN(bookmarkDate) && bookmarkDate >= cutoffDate;
       } catch (dateError) {
           console.warn(`Invalid date format for bookmark ${bookmark.URL}: ${bookmark.Date}`);
-          return false; // Exclude bookmarks with invalid dates
+          return false;
       }
     });
     return { success: true, data: filtered };
@@ -279,33 +257,26 @@ ipcMain.handle('toggle-favorite', async (_, bookmark) => {
       return { success: false, error: "Invalid bookmark data provided for toggle favorite." };
   }
   try {
-    // Important: Ensure we are toggling based on the *current* state in the file if possible,
-    // but for simplicity, we trust the state sent from the renderer for now.
-    // A safer way would be to read the bookmark again before toggling.
     const currentIsFavorite = String(bookmark.Favorite).toLowerCase() === 'true';
     const updatedBookmarkData = {
-      ...bookmark, // Spread existing data from renderer
-      Favorite: !currentIsFavorite // Toggle the boolean state
-      // Let saveBookmark handle converting boolean back to string 'true'/'false'
+      ...bookmark,
+      Favorite: !currentIsFavorite
     };
-
-    // Use saveBookmark which handles both update and string conversion
     await bookmarkManager.saveBookmark(updatedBookmarkData);
-
-    // Return the bookmark with the *confirmed* new state
     return { success: true, bookmark: { ...updatedBookmarkData, Favorite: String(!currentIsFavorite) } };
   } catch (error) {
     return handleIPCError(error, 'toggle-favorite');
   }
 });
 
-// Take a screenshot (used standalone? Less common now, update-screenshot is preferred)
+// Take a screenshot (Standalone - less common)
 ipcMain.handle('take-screenshot', async (_, url) => {
    console.warn("IPC: 'take-screenshot' called directly. Prefer 'update-screenshot' for existing bookmarks.");
    if (!url || typeof url !== 'string' || !url.trim()) {
       return { success: false, error: "Invalid URL provided for screenshot." };
    }
   try {
+    // urlProcessor uses the correctly configured screenshotDir
     const screenshotPath = await urlProcessor.takeScreenshot(url.trim());
     return { success: true, screenshotPath };
   } catch (error) {
@@ -313,63 +284,48 @@ ipcMain.handle('take-screenshot', async (_, url) => {
   }
 });
 
-// Update bookmark screenshot for an existing bookmark
+// Update bookmark screenshot
 ipcMain.handle('update-screenshot', async (_, bookmark) => {
   if (!bookmark || !bookmark.URL) {
       return { success: false, error: "Invalid bookmark data provided for update screenshot." };
   }
   console.log(`IPC: Received update-screenshot request for URL: ${bookmark.URL}`);
   try {
-    // 1. Take a new screenshot
     const newScreenshotPath = await urlProcessor.takeScreenshot(bookmark.URL);
     console.log(`IPC: New screenshot taken: ${newScreenshotPath}`);
-
-    // 2. Get the old path *before* updating
     const oldScreenshotPath = bookmark.Screenshot;
-
-    // 3. Create updated bookmark data object
     const updatedBookmarkData = { ...bookmark, Screenshot: newScreenshotPath };
-
-    // 4. Save the bookmark data with the new path
     await bookmarkManager.saveBookmark(updatedBookmarkData);
     console.log(`IPC: Bookmark ${bookmark.URL} updated with new screenshot path.`);
 
-    // 5. Delete the OLD screenshot file *after* successfully saving the CSV
     if (oldScreenshotPath && oldScreenshotPath !== newScreenshotPath && fs.existsSync(oldScreenshotPath)) {
         try {
             await fsp.unlink(oldScreenshotPath);
             console.log(`IPC: Deleted old screenshot: ${oldScreenshotPath}`);
         } catch (unlinkError) {
             console.warn(`IPC: Failed to delete old screenshot file ${oldScreenshotPath}:`, unlinkError);
-            // Don't fail the whole operation, just log a warning.
         }
     }
-
-    // Return the fully updated bookmark object
     return { success: true, bookmark: updatedBookmarkData };
   } catch (error) {
-    // If taking screenshot or saving failed, the old screenshot won't be deleted.
     return handleIPCError(error, 'update-screenshot');
   }
 });
-
 
 // Get all unique tags
 ipcMain.handle('get-all-tags', async () => {
   try {
     const bookmarks = await bookmarkManager.getBookmarks();
     const tagsSet = new Set();
-
     bookmarks.forEach(bookmark => {
       if (bookmark.Tags && typeof bookmark.Tags === 'string') {
         bookmark.Tags.split(',')
-          .map(tag => tag.trim()) // Trim whitespace
-          .filter(tag => tag) // Remove empty tags
+          .map(tag => tag.trim())
+          .filter(tag => tag)
           .forEach(tag => tagsSet.add(tag));
       }
     });
-
-    const sortedTags = Array.from(tagsSet).sort((a, b) => a.localeCompare(b)); // Case-sensitive sort
+    const sortedTags = Array.from(tagsSet).sort((a, b) => a.localeCompare(b));
     return { success: true, data: sortedTags };
   } catch (error) {
     return handleIPCError(error, 'get-all-tags');
@@ -381,15 +337,13 @@ ipcMain.handle('export-csv', async () => {
   try {
     const { filePath, canceled } = await dialog.showSaveDialog({
       title: 'Export Bookmarks',
-      defaultPath: `bookmarks_${Date.now()}.csv`, // More unique default name
+      defaultPath: `bookmarks_${Date.now()}.csv`,
       filters: [{ name: 'CSV Files', extensions: ['csv'] }]
     });
-
     if (canceled || !filePath) {
       console.log('CSV export cancelled by user.');
       return { success: false, message: 'Export cancelled' };
     }
-
     const count = await bookmarkManager.exportToCSV(filePath);
     return {
       success: true,
@@ -410,23 +364,19 @@ ipcMain.handle('import-csv', async () => {
       properties: ['openFile'],
       filters: [{ name: 'CSV Files', extensions: ['csv'] }]
     });
-
     if (canceled || !filePaths || filePaths.length === 0) {
       console.log('CSV import cancelled by user.');
       return { success: false, message: 'Import cancelled' };
     }
-
     const sourcePath = filePaths[0];
-    const count = await bookmarkManager.importFromCSV(sourcePath); // Returns count of *processed* rows
-
-    // After import, send a signal to renderer to reload bookmarks
+    // bookmarkManager will merge into the CSV at the new portable location
+    const count = await bookmarkManager.importFromCSV(sourcePath);
     if (mainWindow) {
-        mainWindow.webContents.send('bookmarks-updated'); // Define this channel in preload if needed
+        mainWindow.webContents.send('bookmarks-updated');
     }
-
     return {
       success: true,
-      count, // Count of rows processed from the file
+      count,
       message: `Successfully processed ${count} bookmarks from ${path.basename(sourcePath)}`
     };
   } catch (error) {
@@ -435,7 +385,7 @@ ipcMain.handle('import-csv', async () => {
   }
 });
 
-// Open bookmark URL in default browser
+// Open bookmark URL
 ipcMain.handle('open-url', async (_, url) => {
    if (!url || typeof url !== 'string' || !(url.startsWith('http:') || url.startsWith('https:'))) {
        console.warn(`Attempted to open invalid or non-http(s) URL: ${url}`);
@@ -456,67 +406,36 @@ ipcMain.handle('delete-bookmark', async (_, bookmark) => {
   }
   console.log(`IPC: Received delete-bookmark request for URL: ${bookmark.URL}`);
   try {
-    // 1. Get all current bookmarks
     const bookmarks = await bookmarkManager.getBookmarks();
-
-    // 2. Filter out the bookmark to be deleted
     const filteredBookmarks = bookmarks.filter(b => b.URL !== bookmark.URL);
-
-    // Check if actually found and filtered something
     if (filteredBookmarks.length === bookmarks.length) {
         console.warn(`IPC: Bookmark to delete not found in CSV: ${bookmark.URL}`);
-        // Still proceed to attempt file deletion, maybe it's an orphan record
     }
-
-    // 3. Save the updated (filtered) list back to the CSV *FIRST*
     await bookmarkManager.saveBookmarks(filteredBookmarks);
     console.log(`IPC: Saved CSV after removing ${bookmark.URL}.`);
 
-    // 4. If saving was successful, delete the associated screenshot file
     const screenshotToDelete = bookmark.Screenshot;
+    // fs.existsSync will check the path which is now relative to the portable location
     if (screenshotToDelete && typeof screenshotToDelete === 'string' && fs.existsSync(screenshotToDelete)) {
       try {
         await fsp.unlink(screenshotToDelete);
         console.log(`IPC: Deleted associated screenshot: ${screenshotToDelete}`);
       } catch (fileError) {
-        // Log error but don't fail the whole operation, as CSV is updated
-        console.error(`IPC: Error deleting screenshot file ${screenshotToDelete} (bookmark already removed from CSV):`, fileError);
+        console.error(`IPC: Error deleting screenshot file ${screenshotToDelete}:`, fileError);
       }
-    } else {
-        // console.log(`IPC: No screenshot file associated or found for ${bookmark.URL}.`)
     }
-
-    return { success: true }; // Indicate success even if screenshot deletion failed
-
+    return { success: true };
   } catch (error) {
-    // This catches errors from getBookmarks or saveBookmarks mostly
     return handleIPCError(error, 'delete-bookmark');
   }
 });
 
-
 // Check LLM service availability
 ipcMain.handle('check-llm-service', async () => {
   try {
-    // Assuming llmClient.checkService() is implemented and returns { available: boolean, ... }
     const result = await llmClient.checkService();
-    return { success: true, data: result }; // Wrap in success object
+    return { success: true, data: result };
   } catch (error) {
-      // checkService might throw if axios fails completely
     return handleIPCError(error, 'check-llm-service');
   }
 });
-
-// Listen for signal from renderer to reload data (e.g., after import)
-// Note: This requires changes in preload.js and renderer/app.js to handle the 'bookmarks-updated' signal.
-// For simplicity now, we rely on the renderer calling loadBookmarks after import success.
-/*
-ipcMain.on('request-reload-bookmarks', async (event) => {
-    try {
-        const bookmarks = await bookmarkManager.getBookmarks();
-        event.sender.send('bookmarks-reloaded', { success: true, data: bookmarks });
-    } catch (error) {
-        event.sender.send('bookmarks-reloaded', handleIPCError(error, 'reload-bookmarks-on-request'));
-    }
-});
-*/

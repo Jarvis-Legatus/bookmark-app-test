@@ -222,46 +222,54 @@ document.addEventListener('DOMContentLoaded', () => {
         // No finally block needed for button state as re-render handles it
     },
 
-     async toggleFavorite(bookmark) {
+    async toggleFavorite(bookmark) {
       if (!bookmark || !bookmark.URL) return;
       console.log(`Toggling favorite for: ${bookmark.URL}`);
-      const originalState = bookmark.Favorite; // Keep original for potential revert
-
-      // Optimistic UI update: Change star immediately
+      const originalBookmark = { ...bookmark }; // Keep a copy of the original state
+  
+      // Find the index BEFORE the async call
       const index = this.bookmarks.findIndex(b => b.URL === bookmark.URL);
-      if (index !== -1) {
-          this.bookmarks[index].Favorite = (originalState === 'true' ? 'false' : 'true');
-          this.filterAndRenderBookmarks(); // Re-render to show change
+      if (index === -1) {
+          console.error("Bookmark not found in local cache for toggling:", bookmark.URL);
+          return; // Should not happen if UI is correct
       }
-
+  
+      // --- Optimistic UI Update ---
+      // Calculate the new state based on the current state in the local cache
+      const currentIsFavorite = String(this.bookmarks[index].Favorite).toLowerCase() === 'true';
+      const newState = !currentIsFavorite;
+      this.bookmarks[index].Favorite = String(newState); // Update local cache immediately (as string 'true'/'false')
+      this.filterAndRenderBookmarks(); // Re-render to show change
+      // --- End Optimistic Update ---
+  
       try {
-        // Use the updated bookmark object from local state for the API call
-        const result = await window.api.toggleFavorite(this.bookmarks[index]);
+        // Send the *original* bookmark data along with the intention to toggle.
+        // The main process determines the final state based on this.
+        // Alternatively, send the intended new state, but let's stick to the current IPC signature.
+        const result = await window.api.toggleFavorite(originalBookmark); // Use original state for the call
+  
         if (result.success && result.bookmark) {
-           // Confirm the state matches the API response (usually will)
-           if (index !== -1) {
-               this.bookmarks[index].Favorite = result.bookmark.Favorite;
-           }
-          console.log(`Favorite status for ${bookmark.URL} updated to ${result.bookmark.Favorite}`);
-          // No toast needed unless confirming explicit success is desired
-          // this.showToast('Favorite updated');
-          this.filterAndRenderBookmarks(); // Re-render (might be redundant if optimistic worked)
+           // --- Confirmation Update ---
+           // Update local cache with the *confirmed* state from the main process
+           this.bookmarks[index] = result.bookmark;
+           console.log(`Favorite status for ${bookmark.URL} confirmed as ${result.bookmark.Favorite}`);
+           // --- End Confirmation Update ---
         } else {
-          // Revert optimistic update on failure
-          if (index !== -1) {
-              this.bookmarks[index].Favorite = originalState;
-          }
+          // --- Revert on Failure ---
+          console.error('Toggle favorite failed via API:', result.error);
           this.showToast('Error toggling favorite: ' + (result.error || 'Unknown error'), 'error');
-          this.filterAndRenderBookmarks(); // Re-render to show reverted state
+          this.bookmarks[index].Favorite = originalBookmark.Favorite; // Revert local cache
+           // --- End Revert ---
         }
       } catch (error) {
-        // Revert optimistic update on critical failure
-         if (index !== -1) {
-              this.bookmarks[index].Favorite = originalState;
-          }
-        console.error(`Critical error toggling favorite for ${bookmark.URL}:`, error);
-        this.showToast('Critical error toggling favorite: ' + error.message, 'error');
-        this.filterAndRenderBookmarks(); // Re-render to show reverted state
+          // --- Revert on Critical Error ---
+          console.error(`Critical error toggling favorite for ${bookmark.URL}:`, error);
+          this.showToast('Critical error toggling favorite: ' + error.message, 'error');
+          this.bookmarks[index].Favorite = originalBookmark.Favorite; // Revert local cache
+           // --- End Revert ---
+      } finally {
+          // Re-render regardless of success/failure to ensure UI consistency
+          this.filterAndRenderBookmarks();
       }
     },
 
@@ -549,11 +557,13 @@ document.addEventListener('DOMContentLoaded', () => {
               const controlsEl = document.createElement('div');
               controlsEl.className = 'bookmark-controls';
 
-                  const favEl = document.createElement('button');
-                  favEl.className = 'favorite-toggle icon-button';
-                  favEl.innerHTML = String(bookmark.Favorite).toLowerCase() === 'true' ? '★' : '☆'; // Gold star filled/empty
-                  favEl.title = String(bookmark.Favorite).toLowerCase() === 'true' ? 'Remove from Favorites' : 'Add to Favorites';
-                  // Click handled by delegation
+              const favEl = document.createElement('button');
+              // Add 'is-favorite' class if bookmark.Favorite is 'true'
+              const isFavorite = String(bookmark.Favorite).toLowerCase() === 'true';
+              favEl.className = `favorite-toggle icon-button ${isFavorite ? 'is-favorite' : ''}`;
+              favEl.innerHTML = isFavorite ? '★' : '☆'; // Gold star filled/empty
+              favEl.title = isFavorite ? 'Remove from Favorites' : 'Add to Favorites';
+              // Click handled by delegation
 
                   const deleteEl = document.createElement('button');
                   deleteEl.className = 'delete-button icon-button';

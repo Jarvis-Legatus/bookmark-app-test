@@ -407,8 +407,8 @@ button:hover {
      color: var(--star-color); /* Gold on hover */
 }
 /* Explicit style for the 'favorited' state */
-.bookmark-card[data-url] .favorite-toggle:is(★) { /* If button text is ★ */
-    color: var(--star-color); /* Gold when favorited */
+.favorite-toggle.is-favorite {
+  color: var(--star-color); /* Gold when favorited */
 }
  /* Or, if using a class:
  .favorite-toggle.is-favorite { color: var(--star-color); }
