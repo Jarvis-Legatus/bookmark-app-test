@@ -1,0 +1,53 @@
+<!-- renderer/index.html -->
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Bookmark Manager</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <div class="sidebar">
+      <h1>Bookmarks</h1>
+      
+      <div class="add-bookmark">
+        <input type="text" id="url-input" placeholder="Add new URL">
+        <button id="add-button">Add</button>
+      </div>
+      
+      <div class="search-section">
+        <input type="text" id="search-input" placeholder="Search...">
+      </div>
+      
+      <div class="filter-section">
+        <h3>Filters</h3>
+        <ul id="filters">
+          <li data-filter="all" class="active">All Bookmarks</li>
+          <li data-filter="favorites">Favorites</li>
+          <li data-filter="today">Added Today</li>
+          <li data-filter="week">Added This Week</li>
+        </ul>
+      </div>
+      
+      <div class="tags-section">
+        <h3>Tags</h3>
+        <div id="tags-list"></div>
+      </div>
+      
+      <div class="import-export">
+        <button id="export-button">Export CSV</button>
+        <button id="import-button">Import CSV</button>
+      </div>
+    </div>
+    
+    <div class="main-content">
+      <div id="bookmarks-grid"></div>
+    </div>
+  </div>
+  
+  <div id="toast" class="toast"></div>
+  
+  <script src="app.js"></script>
+</body>
+</html>

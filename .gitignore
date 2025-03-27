@@ -1,0 +1,19 @@
+# Node modules
+node_modules
+
+# Build output
+out
+
+# Electron Forge cache/output
+.electron
+
+# Environment variables
+.env
+
+# Data and screenshots (if you don't want these in version control)
+# data/
+# screenshots/
+
+# OS specific
+.DS_Store
+Thumbs.db

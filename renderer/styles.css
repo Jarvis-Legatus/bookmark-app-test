@@ -1,0 +1,509 @@
+/* renderer/styles.css */
+:root {
+  --primary-color: #5457ff;
+  --primary-color-dark: #4043cc;
+  --bg-color: #ffffff;
+  --sidebar-bg: #fdfdfd;
+  --card-bg: #f8f9fa;
+  --text-color: #333333;
+  --text-color-light: #666;
+  --border-color: #e9e9e9;
+  --error-color: #dc3545;
+  --warning-color: #ffc107;
+  --success-color: #28a745;
+  --info-color: #17a2b8;
+  --placeholder-color: #ced4da;
+  --star-color: gold;
+  --button-text: #ffffff;
+  --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-family);
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  font-size: 14px;
+  line-height: 1.5;
+  height: 100vh;
+  overflow: hidden; /* Prevent body scroll */
+}
+
+#app {
+  display: flex;
+  height: 100%; /* Ensure app fills body */
+}
+
+.sidebar {
+  width: 260px; /* Slightly wider */
+  flex-shrink: 0; /* Prevent sidebar from shrinking */
+  border-right: 1px solid var(--border-color);
+  background-color: var(--sidebar-bg);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto; /* Allow sidebar scrolling if content overflows */
+  position: relative; /* For loading overlay */
+}
+
+ /* Loading indicator for sidebar */
+.sidebar.loading::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: rgba(255, 255, 255, 0.7);
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.sidebar.loading::after {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 24px; height: 24px;
+    border: 3px solid rgba(0, 0, 0, 0.2);
+    border-radius: 50%;
+    border-top-color: var(--primary-color);
+    animation: spin 1s linear infinite;
+    z-index: 11;
+}
+
+
+.sidebar h1 {
+  font-size: 22px;
+  margin-bottom: 24px;
+  color: var(--primary-color);
+}
+
+.sidebar h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 20px 0 10px 0;
+  color: var(--text-color-light);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Input field styles */
+input[type="text"] {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 14px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+ input[type="text"]:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(84, 87, 255, 0.2);
+ }
+ input[type="text"]::placeholder {
+     color: var(--placeholder-color);
+ }
+
+
+.add-bookmark {
+  margin-bottom: 20px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.add-bookmark input {
+    flex-grow: 1;
+}
+
+
+.search-section {
+    margin-bottom: 20px;
+}
+
+/* General button styles */
+button {
+  background-color: var(--primary-color);
+  color: var(--button-text);
+  border: none;
+  border-radius: 4px;
+  padding: 10px 15px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s, opacity 0.2s;
+  display: inline-flex; /* Align text and spinner */
+  align-items: center;
+  justify-content: center;
+  gap: 6px; /* Space between icon/spinner and text */
+  white-space: nowrap; /* Prevent wrapping */
+}
+
+button:hover {
+  background-color: var(--primary-color-dark);
+}
+ button:disabled {
+     opacity: 0.6;
+     cursor: not-allowed;
+     background-color: var(--primary-color); /* Keep color but reduced opacity */
+ }
+
+/* Icon-only buttons */
+.icon-button {
+    background: none;
+    border: none;
+    padding: 4px;
+    margin: 0 2px;
+    font-size: 18px; /* Adjust size of icon/emoji */
+    line-height: 1;
+    color: var(--text-color-light);
+    cursor: pointer;
+    border-radius: 50%;
+    width: 28px; /* Fixed size */
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s, color 0.2s;
+}
+ .icon-button:hover {
+     background-color: rgba(0, 0, 0, 0.08);
+     color: var(--text-color);
+ }
+
+/* Filter list styles */
+#filters {
+  list-style: none;
+  padding-left: 0;
+}
+
+#filters li {
+  padding: 8px 10px;
+  margin-bottom: 4px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background-color 0.2s, color 0.2s;
+  font-weight: 500;
+}
+
+#filters li:hover {
+  background-color: rgba(84, 87, 255, 0.1);
+  color: var(--primary-color);
+}
+
+#filters li.active {
+  background-color: rgba(84, 87, 255, 0.15);
+  color: var(--primary-color);
+  font-weight: 600;
+}
+
+/* Tags list styles */
+#tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.tag {
+  background-color: #eef0f2;
+  color: #555;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+  line-height: 1.4;
+}
+
+.tag:hover {
+  background-color: #dfe3e6;
+}
+
+.tag.active {
+  background-color: var(--primary-color);
+  color: white;
+  font-weight: 500;
+}
+
+/* Import/Export section */
+.import-export {
+  margin-top: auto; /* Push to bottom */
+  padding-top: 20px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  gap: 10px;
+}
+ .import-export button {
+     flex: 1; /* Make buttons fill space */
+     background-color: var(--text-color-light);
+ }
+ .import-export button:hover {
+     background-color: var(--text-color);
+ }
+
+/* Main Content Area */
+.main-content {
+  flex: 1; /* Grow to fill remaining space */
+  padding: 20px;
+  overflow-y: auto; /* Allow content scrolling */
+  background-color: #f0f2f5; /* Slightly different bg for contrast */
+}
+
+#bookmarks-grid {
+  display: grid;
+  /* Responsive grid: min 300px wide cards, max 1fr (fill available space) */
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+ /* Empty state message */
+.empty-state {
+    grid-column: 1 / -1; /* Span all columns */
+    text-align: center;
+    padding: 40px;
+    color: var(--text-color-light);
+    font-size: 16px;
+}
+
+/* Bookmark Card */
+.bookmark-card {
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+  background-color: var(--card-bg);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
+  display: flex;
+  flex-direction: column; /* Stack screenshot and content */
+}
+
+.bookmark-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+/* Screenshot Area */
+.screenshot-container {
+    position: relative; /* For overlay button positioning */
+    height: 180px; /* Increased height */
+    background-color: #e9ecef; /* Placeholder bg */
+    overflow: hidden; /* Ensure image fits */
+}
+
+.screenshot {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.screenshot img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover; /* Cover the area, may crop */
+  display: block; /* Remove extra space below image */
+}
+
+.screenshot-placeholder, .screenshot-error {
+    color: var(--text-color-light);
+    font-size: 14px;
+}
+.screenshot-error {
+    color: var(--error-color);
+    font-weight: 500;
+}
+
+/* Screenshot action button (overlay) */
+.button-overlay {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background-color: rgba(0, 0, 0, 0.5);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0; /* Hidden by default */
+    transition: opacity 0.2s, background-color 0.2s;
+    z-index: 2; /* Above image */
+}
+.screenshot-container:hover .button-overlay {
+    opacity: 1; /* Show on hover */
+}
+.button-overlay:hover {
+    background-color: rgba(0, 0, 0, 0.7);
+}
+.button-overlay .spinner { /* Spinner specific style for overlay */
+    width: 16px; height: 16px;
+    border-width: 2px;
+    border-color: rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+}
+
+
+/* Card Content Area */
+.bookmark-content {
+  padding: 15px;
+  flex-grow: 1; /* Allow content to fill remaining space */
+  display: flex;
+  flex-direction: column;
+}
+
+.bookmark-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start; /* Align title top, controls top */
+  margin-bottom: 10px;
+  gap: 10px;
+}
+
+.bookmark-title {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.3;
+  /* Allow title to wrap if needed */
+  /* white-space: nowrap; */
+  /* overflow: hidden; */
+  /* text-overflow: ellipsis; */
+  /* max-width: calc(100% - 70px); Limit width to prevent pushing controls */
+  flex-grow: 1; /* Take available space */
+  word-break: break-word; /* Break long words if needed */
+}
+
+.bookmark-title a {
+  color: var(--text-color);
+  text-decoration: none;
+}
+
+.bookmark-title a:hover {
+  color: var(--primary-color);
+  text-decoration: underline;
+}
+
+.bookmark-controls {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0; /* Prevent controls from shrinking */
+}
+
+.favorite-toggle {
+  /* Inherits .icon-button styles */
+  color: var(--text-color-light); /* Default color */
+}
+.favorite-toggle:hover {
+     color: var(--star-color); /* Gold on hover */
+}
+/* Explicit style for the 'favorited' state */
+.bookmark-card[data-url] .favorite-toggle:is(★) { /* If button text is ★ */
+    color: var(--star-color); /* Gold when favorited */
+}
+ /* Or, if using a class:
+ .favorite-toggle.is-favorite { color: var(--star-color); }
+ */
+
+ .delete-button {
+     /* Inherits .icon-button styles */
+     color: var(--text-color-light);
+ }
+ .delete-button:hover {
+     color: var(--error-color); /* Red on hover */
+ }
+
+
+.bookmark-description {
+  font-size: 13px;
+  color: var(--text-color-light);
+  margin-bottom: 12px;
+  /* Limit description to 3 lines with ellipsis */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.4;
+}
+
+.bookmark-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+ /* Tags within cards use same .tag style, but maybe slightly smaller? */
+ .bookmark-tags .tag {
+     font-size: 11px;
+     padding: 3px 8px;
+ }
+
+.bookmark-footer {
+    margin-top: auto; /* Push date to bottom of content area */
+    padding-top: 8px;
+}
+
+.bookmark-date {
+  font-size: 12px;
+  color: #999;
+}
+
+/* Toast Notification */
+.toast {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background-color: #333;
+  color: white;
+  padding: 12px 20px;
+  border-radius: 4px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+  opacity: 0;
+  transform: translateY(20px); /* Start off screen */
+  transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+  pointer-events: none; /* Allow clicks through */
+  z-index: 1000; /* Above everything */
+  max-width: 300px;
+  font-size: 14px;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+ /* Toast types */
+ .toast.success { background-color: var(--success-color); }
+ .toast.error { background-color: var(--error-color); }
+ .toast.warning { background-color: var(--warning-color); color: #333; } /* Dark text for yellow */
+ .toast.info { background-color: var(--info-color); }
+
+/* Spinner Animation */
+.spinner {
+  display: inline-block;
+  width: 16px; /* Default size */
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3); /* Default for dark buttons */
+  border-radius: 50%;
+  border-top-color: white; /* Default for dark buttons */
+  animation: spin 1s ease-in-out infinite;
+}
+/* Spinner inside light background elements (like screenshot overlay) */
+ .button-overlay .spinner {
+     border-color: rgba(255, 255, 255, 0.4);
+     border-top-color: #fff;
+ }
+
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
